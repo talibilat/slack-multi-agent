@@ -1,0 +1,9 @@
+langchain
+langgraph
+langchain-openai
+chromadb
+langchain-chroma
+langchain-community
+slack_bolt
+python-dotenv
+uuid

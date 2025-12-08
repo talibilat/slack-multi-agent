@@ -1,0 +1,23 @@
+# IT Employee Handbook & Setup Guide
+
+## 1. Network Access
+**Wifi Name**: TechCorp_Guest
+**Wifi Password**: LanChainRocks
+**VPN Gateway**: vpn.techcorp.com
+**VPN Setup**: Download the specific client from access.techcorp.com. Use your standard AD credentials.
+
+## 2. Software Licensing
+**Jira**: Request access via the #it-helpdesk channel or use the automated bot.
+**Zoom**: All employees get a Basic license. Pro licenses require manager approval.
+**Slack**: You are automatically added to public channels.
+**Notion**: Use your company email to sign up.
+
+## 3. Security Policies
+**Password Rotation**: Every 90 days.
+**MFA**: Mandatory for all systems. Use the Authenticator app.
+**Phishing**: Report suspicious emails to security@techcorp.com.
+
+## 4. Hardware Support
+**Printer**: The office printer IP is 192.168.1.50.
+**Monitor Setup**: Use USB-C for the Dell hubs.
+**Mouse/Keyboard**: Pick up from the supply closet on Floor 2.
