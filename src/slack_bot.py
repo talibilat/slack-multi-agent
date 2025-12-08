@@ -4,43 +4,65 @@ from langchain_core.messages import HumanMessage
 from src.graph import app as graph_app
 
 # Initialize Slack App
-app = App(token=os.environ.get("SLACK_BOT_TOKEN"))
+# Note: In production, verify tokens are present.
+app = App(
+    token=os.environ.get("SLACK_BOT_TOKEN"),
+    signing_secret=os.environ.get("SLACK_SIGNING_SECRET") 
+)
 
-def process_and_reply(text: str, user_id: str, say):
-    """
-    Invokes the LangGraph agent and replies to the user.
-    """
-    print(f"Processing message from {user_id}: {text}")
-    
-    initial_state = {"messages": [HumanMessage(content=text)]}
-    
-    # Run the graph
+@app.event("message")
+def handle_message_events(event, say, logger):
     try:
-        result = graph_app.invoke(initial_state)
-        last_message = result["messages"][-1]
-        response_text = last_message.content
-        say(response_text)
+        user_id = event.get("user")
+        text = event.get("text", "")
+        channel_id = event.get("channel")
+        
+        # Skip bot's own messages (loop prevention)
+        # Note: Bolt often handles this, but explicit check is good
+        if not user_id or user_id == os.environ.get("BOT_USER_ID"):
+            return
+
+        # Send placeholder
+        response = say("🤖💭 *(Thinking...)*")
+        placeholder_ts = response["ts"]
+        
+        # Prepare state
+        input_state = {
+            "messages": [HumanMessage(content=text)],
+            "user_id": user_id
+        }
+        
+        # Invoke Agent
+        output_state = graph_app.invoke(input_state)
+        
+        # Extract assistant reply
+        # The graph appends the answer as the last message
+        assistant_reply = None
+        if output_state["messages"]:
+            last_msg = output_state["messages"][-1]
+            if last_msg.type == "ai":
+                assistant_reply = last_msg.content
+        
+        if assistant_reply:
+            # Update the placeholder
+            app.client.chat_update(
+                channel=channel_id,
+                ts=placeholder_ts,
+                text=assistant_reply
+            )
+        else:
+            # Fallback update
+            app.client.chat_update(
+                channel=channel_id,
+                ts=placeholder_ts,
+                text="⚠️ I’m sorry, I couldn’t process that request."
+            )
+            
     except Exception as e:
-        print(f"Error processing message: {e}")
-        say(f"Sorry, I encountered an error: {e}")
+        logger.error(f"Error handling message: {e}")
+        # Try to clean up placeholder if possible, or just post error
+        say("❌ An error occurred while processing your request.")
 
-@app.event("app_mention")
-def handle_app_mention(event, say):
-    """
-    Listens to @mentions (e.g. @ITSupport Help me)
-    """
-    text = event.get("text")
-    user = event.get("user")
-    process_and_reply(text, user, say)
+# Keep app_mention for completeness if needed, or rely on 'message' event for everything
+# The blog uses a generic 'message' handler which catches implied DMs and channel messages where bot is in.
 
-@app.message(".*")
-def handle_message(message, say):
-    """
-    Listens to DMs and Channel messages (requires message.im / message.channels scopes)
-    """
-    text = message.get("text")
-    user = message.get("user")
-    
-    # Avoid bot replying to itself if not handled by Bolt automatically
-    if message.get("bot_id") is None:
-        process_and_reply(text, user, say)

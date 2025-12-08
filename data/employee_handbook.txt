@@ -1,23 +1,32 @@
-# IT Employee Handbook & Setup Guide
+# Employee Handbook - IT Policies
 
-## 1. Network Access
-**Wifi Name**: TechCorp_Guest
-**Wifi Password**: LanChainRocks
-**VPN Gateway**: vpn.techcorp.com
-**VPN Setup**: Download the specific client from access.techcorp.com. Use your standard AD credentials.
+## 1. Password Policy
+All employees must maintain strong passwords.
+- Minimum length: 12 characters.
+- Must contain: Uppercase, lowercase, numbers, and symbols.
+- Expiration: Passwords expire every 90 days.
+- Reset Process: You can reset your password using the IT Support Agent in Slack or by visiting https://sso.example.com/reset.
 
-## 2. Software Licensing
-**Jira**: Request access via the #it-helpdesk channel or use the automated bot.
-**Zoom**: All employees get a Basic license. Pro licenses require manager approval.
-**Slack**: You are automatically added to public channels.
-**Notion**: Use your company email to sign up.
+## 2. Wi-Fi Access
+- Network Name: `Office_Secure_WiFi`
+- Password: `SecureWrapper2025!`
+- Guest Network: `Office_Guest` (Password: `WelcomeToOffice`)
+- Connecting devices: Only company-issued laptops and mobile devices are allowed on the secure network.
 
-## 3. Security Policies
-**Password Rotation**: Every 90 days.
-**MFA**: Mandatory for all systems. Use the Authenticator app.
-**Phishing**: Report suspicious emails to security@techcorp.com.
+## 3. Remote Access (VPN)
+- A VPN connection is required to access internal tools like Jira, Confluence, and the HR portal when working remotely.
+- Client: Cisco AnyConnect or OpenVPN.
+- Server Address: `vpn.example.com`
 
-## 4. Hardware Support
-**Printer**: The office printer IP is 192.168.1.50.
-**Monitor Setup**: Use USB-C for the Dell hubs.
-**Mouse/Keyboard**: Pick up from the supply closet on Floor 2.
+## 4. Software Requests
+- Standard software (Slack, Zoom, VS Code) is pre-installed.
+- Additional software (e.g., Adobe Suite, specialized IDEs) requires manager approval.
+- Request Process: Ask the IT Support Agent "I need access to [Software Name]" or submit a ticket in Jira.
+
+## 5. Security Incidents
+- Report all suspicious emails or activity to `security@example.com` immediately.
+- Do not plug in unknown USB drives found in the office.
+
+## 6. Hardware Replacement
+- Laptops are refreshed every 3 years.
+- Broken peripherals (mice, keyboards) can be swapped at the IT Desk on the 2nd floor from 9 AM to 5 PM.

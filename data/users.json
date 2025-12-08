@@ -1,0 +1,24 @@
+[
+    {
+        "id": "U12345",
+        "email": "alice@example.com",
+        "roles": [
+            "employee"
+        ]
+    },
+    {
+        "id": "U67890",
+        "email": "bob@example.com",
+        "roles": [
+            "employee",
+            "it_support"
+        ]
+    },
+    {
+        "id": "U99999",
+        "email": "eve@contractor.com",
+        "roles": [
+            "contractor"
+        ]
+    }
+]

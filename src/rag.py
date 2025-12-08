@@ -42,6 +42,33 @@ def get_retriever() -> VectorStoreRetriever:
     
     return vectorstore.as_retriever(search_kwargs={"k": 2})
 
+# Blog alignment: alias function
+def ingest_docs(folder: str) -> None:
+    """
+    Ingests documents from a folder into the vector store.
+    Matches the blog post example signature.
+    """
+    persist_directory = "./chroma_db"
+    
+    # Simple recursive loader for the folder
+    # Note: In the real app we might use DirectoryLoader, but here we just replicate the logic
+    # using our existing setup for specific file or folder.
+    print(f"Ingesting docs from {folder}...")
+    loader = TextLoader(os.path.join(folder, "employee_handbook.txt")) # Simplified for demo
+    documents = loader.load()
+    
+    text_splitters = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    splits = text_splitters.split_documents(documents)
+    
+    vectorstore = Chroma.from_documents(
+        documents=splits,
+        embedding=embeddings,
+        collection_name="employee_handbook",
+        persist_directory=persist_directory
+    )
+    # vectorstore.persist() # Chroma 0.4+ persists automatically or via specific calls depending on backend
+    print("Ingestion complete.")
+
 def query_handbook(query: str) -> str:
     """Helper to test the retriever"""
     retriever = get_retriever()

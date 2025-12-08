@@ -1,167 +1,181 @@
-from typing import TypedDict, Literal, Annotated, Sequence
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import AzureChatOpenAI
-from pydantic import BaseModel, Field
-from langgraph.graph import END, StateGraph, START
-from langgraph.prebuilt import ToolNode
+from typing import TypedDict, Annotated, Sequence, Dict, Optional, List, Literal
 import operator
 import os
 
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_openai import AzureChatOpenAI
+from langgraph.graph import END, StateGraph, START
+from langgraph.graph import MessagesState
+
 # Internal imports
-from src.tools import provision_access, reset_password
+from src.tools import provision_access_tool, reset_password_tool, USER_DB
 from src.rag import get_retriever
 
 # --- State Definition ---
+# Blog uses MessagesState extended with custom keys
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], operator.add]
-    intent: str
+    user_id: str
+    route: Optional[str]
+    target_email: Optional[str]
+    app_name: Optional[str]
+    retrieved_text: Optional[str]
+    action_result: Optional[Dict]
 
 # --- Components ---
-# Using Azure OpenAI
 llm = AzureChatOpenAI(
     azure_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT"),
     api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
     temperature=0
 )
 
-# Router
-class RouteQuery(BaseModel):
-    """Route a user query to the most relevant datasource."""
-    datasource: Literal["vectorstore", "it_tools"] = Field(
-        ...,
-        description="Given a user question choose to route it to the 'vectorstore' for policy questions or 'it_tools' for actions like provisioning or resets.",
-    )
-
-# structured_llm_router = llm.with_structured_output(RouteQuery, method="function_calling")
-# Fallback to manual binding for Azure legacy/custom model compatibility
-router_tool = llm.bind_tools([RouteQuery], tool_choice="RouteQuery")
-
 # --- Nodes ---
 
-def router_node(state: AgentState):
+def analyze_query(state: AgentState):
     """
-    Analyzes the user's last message and decides the route.
+    Analyze user message and decide which path to take.
+    Simple rule-based classifier for the demo, as per blog.
     """
-    print("--- ROUTER NODE ---")
-    system_prompt = """You are an expert IT triage agent.
-    You must decide if a user's request is a QUESTION about policy (route to vectorstore) 
-    or an ACTION requiring IT tools (route to it_tools).
+    print("--- 1. ANALYZE QUERY ---")
+    user_text = state["messages"][-1].content.lower()
+    decision = {}
     
-    Examples:
-    "How do I reset my password?" -> vectorstore
-    "I need a Jira license" -> it_tools
-    "What is the wifi password?" -> vectorstore
-    "Reset the password for bob@example.com" -> it_tools
-    """
-    messages = [{"role": "system", "content": system_prompt}] + state["messages"]
-    
-    # Invoke with tool choice forced
-    response = router_tool.invoke(messages)
-    print(f"Router Response: {response.tool_calls}")
-    
-    # Parse the tool call
-    if response.tool_calls:
-        tool_call = response.tool_calls[0]
-        # RouteQuery arguments
-        args = tool_call["args"]
-        datasource = args.get("datasource")
-        if datasource:
-            print(f"Routing to: {datasource}")
-            return {"intent": datasource}
-            
-    # Fallback default
-    print("Fallback to vectorstore")
-    return {"intent": "vectorstore"}
+    # Get user email for defaults
+    user_info = USER_DB.get(state["user_id"], {})
+    user_email = user_info.get("email", "")
 
-def rag_node(state: AgentState):
-    """
-    Retrieves documents and answers the question.
-    """
-    print("--- RAG NODE ---")
-    last_message = state["messages"][-1]
-    question = last_message.content
-    
-    retriever = get_retriever()
-    docs = retriever.invoke(question)
-    context = "\n\n".join([d.page_content for d in docs])
-    
-    rag_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful IT assistant. Use the following context to answer the user's question. If you don't know, say so.\n\nContext:\n{context}"),
-        ("human", "{question}"),
-    ])
-    
-    chain = rag_prompt | llm
-    response = chain.invoke({"context": context, "question": question})
-    return {"messages": [response]}
-
-def tools_agent_node(state: AgentState):
-    """
-    The agent responsible for calling tools.
-    """
-    print("--- TOOLS AGENT NODE ---")
-    tools = [provision_access, reset_password]
-    model_with_tools = llm.bind_tools(tools)
-    response = model_with_tools.invoke(state["messages"])
-    print(f"Agent Response: {response}")
-    return {"messages": [response]}
-
-# --- Conditional Edges ---
-
-def route_conditional(state: AgentState):
-    if state["intent"] == "vectorstore":
-        return "rag_node"
-    elif state["intent"] == "it_tools":
-        return "tools_agent_node"
+    if "password" in user_text and "reset" in user_text:
+        decision["route"] = "reset_password"
+        # Naive extraction for demo: assuming 'for email@domain.com'
+        # In reality an LLM extraction is better, but here we strictly follow the blog's idea
+        words = user_text.split()
+        target_email = user_email # Default to self
+        for word in words:
+            if "@" in word:
+                target_email = word
+        decision["target_email"] = target_email
+        print(f"Decision: Reset Password for {target_email}")
+        
+    elif "access" in user_text or "license" in user_text or "provision" in user_text:
+        decision["route"] = "provision_access"
+        # Naive extraction: assume app name is often the 2nd or last word? 
+        # Let's clean up logic slightly better than pure split:
+        # "access to production_db" -> production_db
+        words = user_text.split()
+        app_name = ""
+        if "access to" in user_text:
+             app_name = user_text.split("access to")[-1].strip().split()[0]
+        elif "license for" in user_text:
+             app_name = user_text.split("license for")[-1].strip().split()[0]
+        else:
+             app_name = words[-1] # Fallback
+        
+        # Remove punctuation
+        app_name = app_name.strip(".,?!")
+        decision["app_name"] = app_name
+        print(f"Decision: Provision Access to {app_name}")
+        
     else:
-        return "rag_node" # Fallback
+        decision["route"] = "knowledge"
+        print("Decision: Knowledge Query")
+        
+    return decision
 
-def should_continue(state: AgentState):
-    last_message = state["messages"][-1]
-    if last_message.tool_calls:
-        return "tools"
-    return END
+def retrieve_info(state: AgentState):
+    """Use the retriever to get relevant text for answering."""
+    print("--- 2. RETRIEVE INFO ---")
+    query = state["messages"][-1].content
+    retriever = get_retriever()
+    docs = retriever.invoke(query)
+    
+    if docs:
+        state["retrieved_text"] = "\n\n".join([d.page_content for d in docs])
+    else:
+        state["retrieved_text"] = ""
+    return {"retrieved_text": state["retrieved_text"]}
+
+def answer_user(state: AgentState):
+    """Use LLM to generate answer, possibly with context."""
+    print("--- 3. ANSWER USER ---")
+    user_question = state["messages"][-1].content
+    context = state.get("retrieved_text", "")
+    
+    system_prompt = "You are a helpful IT support assistant. Answer the question using the provided context if relevant."
+    
+    if context:
+        prompt = f"{system_prompt}\n\nContext: {context}\n\nUser: {user_question}"
+    else:
+        prompt = f"{system_prompt}\n\nUser: {user_question}"
+        
+    response = llm.invoke(prompt)
+    # Return as list to append
+    return {"messages": [response]}
+
+def perform_action(state: AgentState):
+    """Dispatch to the appropriate tool based on route."""
+    print("--- 4. PERFORM ACTION ---")
+    route = state.get("route")
+    result = {}
+    
+    if route == "reset_password":
+        tool_state = { 
+            "requester": state["user_id"],
+            "target_email": state.get("target_email", "") 
+        }
+        result = reset_password_tool(tool_state)
+        
+    elif route == "provision_access":
+        tool_state = { 
+            "requester": state["user_id"], 
+            "app_name": state.get("app_name", "") 
+        }
+        result = provision_access_tool(tool_state)
+        
+    return {"action_result": result}
+
+def format_action_result(state: AgentState):
+    print("--- 5. FORMAT RESULT ---")
+    res = state.get("action_result", {})
+    if not res:
+        reply = "I'm sorry, I couldn't perform the requested action."
+    elif res.get("result") == "success":
+        reply = f"✅ {res.get('message', 'Done.')}"
+    else:
+        reply = f"⚠️ {res.get('message', 'Action failed.')}"
+        
+    return {"messages": [AIMessage(content=reply)]}
 
 # --- Graph Construction ---
 workflow = StateGraph(AgentState)
 
-# Add Nodes
-workflow.add_node("router", router_node)
-workflow.add_node("rag_node", rag_node)
-workflow.add_node("tools_agent_node", tools_agent_node)
-workflow.add_node("tools", ToolNode([provision_access, reset_password]))
+workflow.add_node("analyze_query", analyze_query)
+workflow.add_node("retrieve_info", retrieve_info)
+workflow.add_node("answer_user", answer_user)
+workflow.add_node("perform_action", perform_action)
+workflow.add_node("format_result", format_action_result)
 
-# Add Edges
-workflow.add_edge(START, "router")
+workflow.add_edge(START, "analyze_query")
+
+# Conditional logic for analyze_query
+def route_check(state):
+    return state["route"]
+
 workflow.add_conditional_edges(
-    "router",
-    route_conditional,
+    "analyze_query",
+    route_check,
     {
-        "rag_node": "rag_node",
-        "tools_agent_node": "tools_agent_node"
+        "knowledge": "retrieve_info",
+        "reset_password": "perform_action",
+        "provision_access": "perform_action"
     }
 )
 
-workflow.add_edge("rag_node", END)
+# Knowledge path
+workflow.add_edge("retrieve_info", "answer_user")
+workflow.add_edge("answer_user", END)
 
-# workflow.add_edge("tools_agent_node", "tools") # REDUNDANT: handled by conditional edge
-
-workflow.add_edge("tools", END) # In a more complex loop, we might go back to agent. 
-# But for 'do X' -> 'done', END is fine. 
-# Actually, usually after tool execution, the agent should confirm.
-# Let's verify: LLM -> ToolCall -> ToolNode -> ToolMessage -> LLM (to say "It's done").
-# So I should add an edge back to tools_agent_node?
-# Let's adjust: tools -> tools_agent_node.
-# And tools_agent_node -> should_continue -> END if no more tools.
-
-workflow.add_edge("tools", "tools_agent_node")
-workflow.add_conditional_edges(
-    "tools_agent_node",
-    should_continue,
-    {
-        "tools": "tools",
-        END: END
-    }
-)
+# Action path
+workflow.add_edge("perform_action", "format_result")
+workflow.add_edge("format_result", END)
 
 app = workflow.compile()

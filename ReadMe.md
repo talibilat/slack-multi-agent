@@ -2,6 +2,17 @@
 
 To run the IT Support Agent, you need to configure the `.env` file with credentials for OpenAI and Slack.
 
+For detailed setup instructions and a system overview, please see [SETUP.md](SETUP.md).
+
+## Code Structure
+
+*   `src/graph.py`: Defines the LangGraph workflow (Analyze -> Decide -> Act).
+*   `src/slack_bot.py`: The Slack Bolt app that connects the graph to Slack.
+*   `src/tools.py`: Contains the mock tools (`reset_password`, `provision_access`) with RBAC logic.
+*   `src/rag.py`: Handles document ingestion and retrieval using ChromaDB.
+*   `data/`: Contains mock user database and employee handbook.
+*   `verify_agent.py`: A script to test the agent logic without needing a real Slack connection.
+
 ## 1. OpenAI API Key
 **Variable**: `OPENAI_API_KEY`
 
@@ -67,4 +78,21 @@ SLACK_APP_TOKEN=xapp-...
 SLACK_BOT_TOKEN=xoxb-...
 ```
 
-Save the file and run `python main.py`.
+Save the file.
+
+## 4. Running the Agent
+
+### Start the Slack Bot
+Run the main application to connect to Slack:
+```bash
+python main.py
+```
+
+### Verification (No Slack Required)
+To test the agent logic directly in the terminal (without Slack), run:
+```bash
+python verify_agent.py
+```
+This will run two test cases:
+1. A RAG query ("What is the guest wifi password?")
+2. A Tool execution ("I need a license for Jira...")
