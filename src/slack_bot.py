@@ -63,6 +63,8 @@ def handle_message_events(event, say, logger):
         # Try to clean up placeholder if possible, or just post error
         say("❌ An error occurred while processing your request.")
 
-# Keep app_mention for completeness if needed, or rely on 'message' event for everything
-# The blog uses a generic 'message' handler which catches implied DMs and channel messages where bot is in.
+@app.event("app_mention")
+def handle_app_mention_events(event, say, logger):
+    # Reuse handling logic
+    handle_message_events(event, say, logger)
 
