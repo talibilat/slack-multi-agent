@@ -192,7 +192,7 @@ graph.add_edge("analyze_query", "retrieve_info", condition=lambda out: out.get("
 
 # Node 3: Answer user with LLM (uses retrieved_text if available)
 from langchain.chat_models import ChatOpenAI
-llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+llm = ChatOpenAI(model_name="gpt-5-chat", temperature=0)
 
 def answer_user(state: MessagesState):
     """Use LLM to generate answer, possibly with context."""
@@ -361,7 +361,6 @@ With the agent running, we effectively have a Level-1 IT Support assistant on au
 
 What about accuracy? The agent will only be as good as the knowledge and tools we give it. If the documentation is outdated or the agent tries to answer beyond its scope, it could falter. One advantage of our approach is that if the agent isn’t confident or the retrieval comes back empty, we could program it to fall back (“I’m not sure about that, let me escalate to IT.”). Also, by using the company knowledge base, we reduce the chance of the LLM hallucinating an answer – it tends to stick to the provided context. This aligns with best practices to avoid the “AI confidently wrong” scenario.
 
-Performance considerations: Using GPT-4 (as we denoted) will yield excellent reasoning but has higher latency and cost. For faster responses, one might use GPT-3.5 for classification and simple answers, reserving GPT-4 for complex queries or where a higher quality answer is needed. Caching can also help – if multiple users ask the same question, the agent could reuse previous answers or retrieved results instead of recomputing.
 
 Challenges and Limitations
 
