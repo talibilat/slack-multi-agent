@@ -43,6 +43,7 @@ def router_node(state: AgentState):
     """
     Analyzes the user's last message and decides the route.
     """
+    print("--- ROUTER NODE ---")
     system_prompt = """You are an expert IT triage agent.
     You must decide if a user's request is a QUESTION about policy (route to vectorstore) 
     or an ACTION requiring IT tools (route to it_tools).
@@ -57,6 +58,7 @@ def router_node(state: AgentState):
     
     # Invoke with tool choice forced
     response = router_tool.invoke(messages)
+    print(f"Router Response: {response.tool_calls}")
     
     # Parse the tool call
     if response.tool_calls:
@@ -65,15 +67,18 @@ def router_node(state: AgentState):
         args = tool_call["args"]
         datasource = args.get("datasource")
         if datasource:
+            print(f"Routing to: {datasource}")
             return {"intent": datasource}
             
     # Fallback default
+    print("Fallback to vectorstore")
     return {"intent": "vectorstore"}
 
 def rag_node(state: AgentState):
     """
     Retrieves documents and answers the question.
     """
+    print("--- RAG NODE ---")
     last_message = state["messages"][-1]
     question = last_message.content
     
@@ -94,9 +99,11 @@ def tools_agent_node(state: AgentState):
     """
     The agent responsible for calling tools.
     """
+    print("--- TOOLS AGENT NODE ---")
     tools = [provision_access, reset_password]
     model_with_tools = llm.bind_tools(tools)
     response = model_with_tools.invoke(state["messages"])
+    print(f"Agent Response: {response}")
     return {"messages": [response]}
 
 # --- Conditional Edges ---
@@ -137,7 +144,8 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("rag_node", END)
 
-workflow.add_edge("tools_agent_node", "tools") # Execute tool
+# workflow.add_edge("tools_agent_node", "tools") # REDUNDANT: handled by conditional edge
+
 workflow.add_edge("tools", END) # In a more complex loop, we might go back to agent. 
 # But for 'do X' -> 'done', END is fine. 
 # Actually, usually after tool execution, the agent should confirm.
